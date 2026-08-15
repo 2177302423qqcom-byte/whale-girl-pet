@@ -1,0 +1,13 @@
+{
+  "name": "@dsh-external/dsh-plugin-whale-bridge",
+  "description": "Host bridge for the whale-girl desktop pet: drives the whale-pet agent session and exposes localhost HTTP endpoints for the desktop app.",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "lib/index2.js",
+  "exports": {
+    ".": "./lib/index2.js",
+    "./package.json": "./package.json"
+  },
+  "license": "MIT"
+}
