@@ -1,0 +1,19 @@
+# 构建产物与本地文件
+bin/
+obj/
+*.user
+whale-desktop-app/
+whale-launcher/
+*.log
+
+# 素材不入库(CC BY-NC-SA,由 fetch-assets.ps1 获取)
+WhalePet/assets/*.png
+WhalePet/assets/*.webp
+
+# 本地个性化数据
+whale-name.txt
+whale-theme.txt
+
+# 临时
+*.tmp
+.vs/
