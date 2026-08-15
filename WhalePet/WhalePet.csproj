@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>WhalePet</AssemblyName>
+    <RootNamespace>WhalePet</RootNamespace>
+    <ApplicationIcon>whale-girl.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="whale-girl.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
