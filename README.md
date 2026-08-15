@@ -100,7 +100,7 @@ dotnet build -c Release
 # 1) 安装鲸鱼娘人格 preset(复制到 %USERPROFILE%\.dsh\.agent-presets\whale-girl\)
 # 2) 安装桥接插件(复制到 profile 的 node_modules,并在 cordis.patch.yml 加一行)
 # 3) 安装网页桌宠(可选)
-# 详见 dsh-plugin/ 下各目录 README
+# 详细步骤见 dsh-plugin/README.md 及各插件目录 README
 ```
 
 ### 4. 运行
