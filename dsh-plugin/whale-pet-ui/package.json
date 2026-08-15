@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-external/dsh-client-ui-whale-girl-pet",
+  "description": "Whale-girl desktop pet for the dsh web GUI: click to chat, right-click menu, breathing idle animation. Companion to the maid-atelier skin.",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib",
+    "NOTICE"
+  ],
+  "license": "MIT"
+}
