@@ -1,0 +1,17 @@
+whale-girl-pet (鲸鱼娘桌宠 · Whale-Girl Desktop Pet)
+=====================================================
+
+Character artwork shown by this pet is loaded from the maid-atelier skin
+(repo: Small-tailqwq/dsh-deep-whale, package @dsh-external/dsh-client-ui-skin-maid-atelier),
+a tertiary derivative work under CC BY-NC-SA 4.0. The full attribution chain:
+
+1. 一创 (initial creation): 上善 —— 鲸鱼娘 (whale-girl) character design.
+   https://www.pixiv.net/users/62155430
+2. 二创 (secondary creation): zipzip —— maid whale-girl redesign adding
+   DeepSeek elements (generated with GPT Image 2).
+   https://www.pixiv.net/users/18604994
+3. 三创 (this skin): Small-tailqwq (dsh-external/dsh-deep-whale).
+
+Usage terms of the artwork: CC BY-NC-SA 4.0 —— attribution required,
+non-commercial only, share-alike for derivatives.
+The pet plugin code itself (this package) is MIT.
