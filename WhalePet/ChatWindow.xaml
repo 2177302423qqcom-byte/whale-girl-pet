@@ -1,0 +1,195 @@
+<Window x:Class="WhalePet.ChatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="💬 鲸鱼娘聊天室" Width="430" Height="680" MinWidth="360" MinHeight="520"
+        WindowStartupLocation="Manual" Background="{DynamicResource WhBgWindow}"
+        FontFamily="Microsoft YaHei" Closing="OnClosing">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <Border Grid.Row="0" Background="{DynamicResource WhBgHeader}" BorderBrush="{DynamicResource WhAccent}"
+                BorderThickness="0,0,0,1" Padding="12,9">
+            <Grid>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🐳 鲸鱼娘聊天室" FontWeight="Bold" Foreground="{DynamicResource WhTitleText}"
+                               FontSize="14.5" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StateText" Text="· 连接中…" Foreground="{DynamicResource WhTextSecondary}"
+                               FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="ThemeBtn" Content="🎨" Width="30" Height="26" Margin="0,0,4,0"
+                            Background="Transparent" BorderThickness="0" FontSize="14" Cursor="Hand"
+                            ToolTip="切换主题(深海蓝/纯黑)" Foreground="{DynamicResource WhTextSecondary}" />
+                    <ToggleButton x:Name="PinBtn" Content="📌" Width="30" Height="26"
+                                  Background="Transparent" BorderThickness="0" FontSize="14" Cursor="Hand"
+                                  ToolTip="窗口置顶" Foreground="{DynamicResource WhTextSecondary}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 页签 -->
+        <Border Grid.Row="1" Background="{DynamicResource WhBgTabs}" Padding="10,6">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="TabChatBtn" Content="💬 聊天" FontSize="12.5" FontWeight="Bold"
+                        Foreground="{DynamicResource WhTitleText}" Background="{DynamicResource WhTabSel}"
+                        BorderThickness="0" Padding="14,6" Margin="0,0,6,0" Cursor="Hand" Click="TabChat_Click" />
+                <Button x:Name="TabWorkBtn" Content="🛠️ 工作台" FontSize="12.5" Foreground="{DynamicResource WhTextSecondary}"
+                        Background="Transparent" BorderThickness="0" Padding="14,6" Cursor="Hand"
+                        Click="TabWork_Click" />
+            </StackPanel>
+        </Border>
+
+        <!-- 内容区:聊天 + 工作台 -->
+        <Grid Grid.Row="2">
+            <ListBox x:Name="ChatLog" Background="Transparent" BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="12,10"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0,2" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Focusable" Value="False" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,4">
+                            <StackPanel x:Name="Row" Orientation="Horizontal" HorizontalAlignment="{Binding Align}">
+                                <Border x:Name="PetAvatar" Width="32" Height="32" CornerRadius="16"
+                                        Background="{DynamicResource WhBgInput}" BorderBrush="{DynamicResource WhAccent}"
+                                        BorderThickness="1.5" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,12,0,0">
+                                    <TextBlock Text="🐳" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Margin="8,0,0,0">
+                                    <TextBlock x:Name="Meta" FontSize="10.5" Foreground="{DynamicResource WhTimeText}"
+                                               Margin="3,0,0,2" Text="{Binding Meta}" />
+                                    <Border x:Name="MsgBubble" Background="{DynamicResource WhBgPetBubble}"
+                                            CornerRadius="13,13,13,4" MaxWidth="280" Padding="11,9">
+                                        <TextBlock x:Name="MsgText" Text="{Binding Text}" TextWrapping="Wrap" FontSize="13.5"
+                                                   Foreground="{DynamicResource WhTextPrimary}" LineHeight="20" />
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Role}" Value="user">
+                                <Setter TargetName="Row" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="PetAvatar" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="MsgBubble" Property="Background" Value="{DynamicResource WhBgUserBubble}" />
+                                <Setter TargetName="MsgBubble" Property="CornerRadius" Value="13,13,4,13" />
+                                <Setter TargetName="Meta" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="Meta" Property="Margin" Value="0,0,3,2" />
+                                <Setter TargetName="MsgBubble" Property="MaxWidth" Value="280" />
+                                <Setter TargetName="MsgText" Property="Foreground" Value="{DynamicResource WhTextOnLight}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Role}" Value="sys">
+                                <Setter TargetName="Row" Property="HorizontalAlignment" Value="Center" />
+                                <Setter TargetName="PetAvatar" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="MsgBubble" Property="Background" Value="Transparent" />
+                                <Setter TargetName="MsgBubble" Property="BorderThickness" Value="0" />
+                                <Setter TargetName="MsgBubble" Property="MaxWidth" Value="320" />
+                                <Setter TargetName="MsgBubble" Property="Padding" Value="4,2" />
+                                <Setter TargetName="Meta" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Role}" Value="think">
+                                <Setter TargetName="Row" Property="HorizontalAlignment" Value="Left" />
+                                <Setter TargetName="PetAvatar" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="MsgBubble" Property="Background" Value="Transparent" />
+                                <Setter TargetName="MsgBubble" Property="BorderThickness" Value="0" />
+                                <Setter TargetName="MsgBubble" Property="Padding" Value="4,2" />
+                                <Setter TargetName="Meta" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- 工作台(简化版):任务输入 + 活动流 -->
+            <Grid x:Name="WorkView" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="{DynamicResource WhBgTabs}" BorderBrush="{DynamicResource WhAccent}"
+                        BorderThickness="0,0,0,1" Padding="10,8">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🛠️ 鲸鱼娘的工作台" Foreground="{DynamicResource WhTitleText}"
+                                       FontSize="13" FontWeight="Bold" />
+                            <TextBlock x:Name="WorkState" Text="加载中…" Foreground="{DynamicResource WhTextSecondary}"
+                                       FontSize="11.5" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button x:Name="WorkFull" Content="完整版 ↗" Foreground="{DynamicResource WhAccent}"
+                                Background="Transparent" BorderThickness="0" FontSize="11.5" Cursor="Hand"
+                                HorizontalAlignment="Right" />
+                    </Grid>
+                </Border>
+                <ListBox x:Name="WorkLog" Grid.Row="1" Background="Transparent" BorderThickness="0"
+                         Padding="10,8" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0,2" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Focusable" Value="False" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,5">
+                                <TextBlock Text="{Binding Time}" FontSize="10" Foreground="{DynamicResource WhTimeText}" />
+                                <Border Background="{DynamicResource WhBgWorkCard}" CornerRadius="8" Padding="9,7" Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding Text}" FontSize="12.5" Foreground="{DynamicResource WhCardText}"
+                                               TextWrapping="Wrap" LineHeight="18" />
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <Grid Grid.Row="2" Background="{DynamicResource WhBgInputRow}" Margin="10,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="TaskInput" Grid.Column="0" Background="{DynamicResource WhBgInput}"
+                             Foreground="White" CaretBrush="White" FontSize="13"
+                             BorderBrush="{DynamicResource WhBorderInput}" BorderThickness="1.5" Padding="8,7"
+                             VerticalContentAlignment="Center" KeyDown="TaskInput_KeyDown"
+                             ToolTip="给鲸鱼娘下达任务,回车下达" />
+                    <Button x:Name="TaskSend" Grid.Column="1" Content="下达任务" Margin="8,0,0,0"
+                            Background="{DynamicResource WhAccent}" Foreground="White" FontWeight="Bold"
+                            BorderThickness="0" MinWidth="76" Cursor="Hand" Click="TaskSend_Click" />
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- 聊天输入区 -->
+        <Grid x:Name="ChatInputRow" Grid.Row="3" Background="{DynamicResource WhBgInputRow}" Margin="10,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="ChatInput" Grid.Column="0" Background="{DynamicResource WhBgInput}"
+                     Foreground="White" CaretBrush="White" FontSize="13.5"
+                     BorderBrush="{DynamicResource WhBorderInput}" BorderThickness="1.5" Padding="8,7"
+                     VerticalContentAlignment="Center" KeyDown="ChatInput_KeyDown"
+                     ToolTip="回车发送,可以聊天也可以派任务" />
+            <Button x:Name="ChatSend" Grid.Column="1" Content="发送" Margin="8,0,0,0"
+                    Background="{DynamicResource WhAccent}" Foreground="White" FontWeight="Bold"
+                    BorderThickness="0" MinWidth="64" Cursor="Hand" Click="ChatSend_Click" />
+        </Grid>
+    </Grid>
+</Window>
