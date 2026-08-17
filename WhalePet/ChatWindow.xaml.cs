@@ -126,7 +126,7 @@ namespace WhalePet
             if (_busy) return;
             if (switchToChat) ShowTab(true);
             if (addUserMsg) AddMsg("user", text);
-            if (showThinking) AddMsg("think", "鲸鱼娘思考中…");
+            if (showThinking) StartThinking();
             _busy = true;
             ChatSend.IsEnabled = false;
             TaskSend.IsEnabled = false;
@@ -138,25 +138,27 @@ namespace WhalePet
                 using var resp = await _http.SendAsync(req);
                 var body = await resp.Content.ReadAsStringAsync();
                 string reply = "";
+                string error = "";
                 bool ok = false;
                 if (!string.IsNullOrWhiteSpace(body))
                 {
                     JsonDocument doc = JsonDocument.Parse(body);
                     if (doc.RootElement.TryGetProperty("ok", out var okProp)) ok = okProp.GetBoolean();
                     if (doc.RootElement.TryGetProperty("reply", out var rp)) reply = rp.GetString() ?? "";
+                    if (doc.RootElement.TryGetProperty("error", out var ep)) error = ep.GetString() ?? "";
                     doc.Dispose();
                 }
-                RemoveThinking();
+                StopThinking();
                 if (ok && !string.IsNullOrEmpty(reply))
                 {
                     AddMsg("pet", reply);
                     PetLine?.Invoke(reply); // 桌宠头顶气泡实时显示
                 }
-                else AddMsg("sys", "鲸鱼娘没听清…再试一次?");
+                else AddMsg("sys", string.IsNullOrEmpty(error) ? "鲸鱼娘没听清…再试一次?" : error);
             }
             catch (Exception ex)
             {
-                RemoveThinking();
+                StopThinking();
                 _serverUp = false;
                 Log("SendChat", ex);
                 if (!retried && IsLoaded)
@@ -209,8 +211,55 @@ namespace WhalePet
 
         private void RemoveThinking()
         {
+            StopThinking();
             for (int i = _msgs.Count - 1; i >= 0; i--)
                 if (_msgs[i].Role == "think") { _msgs.RemoveAt(i); break; }
+        }
+
+        // ── 俏皮思考动画 ──
+        private static readonly string[] ThinkPhrases =
+        {
+            "🐳 鲸鱼娘在深海里翻找答案",
+            "🫧 咕噜咕噜…打捞回复气泡中",
+            "🐟 追着小鱼绕了一圈,马上回来",
+            "🎣 正在从深海钓回复",
+            "✍️ 用尾巴蘸墨写回信",
+            "🧠 深海算力加载中",
+            "🌊 顺着洋流找答案",
+        };
+        private readonly DispatcherTimer _thinkTimer = new() { Interval = TimeSpan.FromMilliseconds(1400) };
+        private int _thinkIdx;
+        private int _thinkDots;
+
+        private void StartThinking()
+        {
+            StopThinking();
+            _thinkIdx = new Random().Next(ThinkPhrases.Length);
+            _thinkDots = 0;
+            AddMsg("think", ThinkPhrases[_thinkIdx] + "…");
+            _thinkTimer.Tick += ThinkTick;
+            _thinkTimer.Start();
+        }
+
+        private void ThinkTick(object sender, EventArgs e)
+        {
+            ChatMsg last = null;
+            for (int i = _msgs.Count - 1; i >= 0; i--)
+                if (_msgs[i].Role == "think") { last = _msgs[i]; break; }
+            if (last == null) { StopThinking(); return; }
+            _thinkDots++;
+            if (_thinkDots % 4 == 0)
+            {
+                _thinkIdx = (_thinkIdx + 1 + new Random().Next(ThinkPhrases.Length - 1)) % ThinkPhrases.Length;
+                _thinkDots = 0;
+            }
+            last.Text = ThinkPhrases[_thinkIdx] + new string('…', 1 + (_thinkDots % 3));
+        }
+
+        private void StopThinking()
+        {
+            _thinkTimer.Stop();
+            _thinkTimer.Tick -= ThinkTick;
         }
 
         private void SetState(string text, Brush brush)
