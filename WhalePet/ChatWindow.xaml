@@ -73,9 +73,13 @@
                                     <TextBlock x:Name="Meta" FontSize="10.5" Foreground="{DynamicResource WhTimeText}"
                                                Margin="3,0,0,2" Text="{Binding Meta}" />
                                     <Border x:Name="MsgBubble" Background="{DynamicResource WhBgPetBubble}"
-                                            CornerRadius="13,13,13,4" MaxWidth="280" Padding="11,9">
-                                        <TextBlock x:Name="MsgText" Text="{Binding Text}" TextWrapping="Wrap" FontSize="13.5"
-                                                   Foreground="{DynamicResource WhTextPrimary}" LineHeight="20" />
+                                            CornerRadius="13,13,13,4" MaxWidth="280" Padding="6,5">
+                                        <TextBox x:Name="MsgText" Text="{Binding Text}" TextWrapping="Wrap"
+                                                 FontSize="13.5" Foreground="{DynamicResource WhTextPrimary}"
+                                                 IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 Padding="5,4" Margin="0" Cursor="IBeam"
+                                                 SelectionBrush="#4A90D9" SelectionTextBrush="White"
+                                                 ToolTip="可选中,按 Ctrl+C 复制" />
                                     </Border>
                                 </StackPanel>
                             </StackPanel>
