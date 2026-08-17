@@ -20,20 +20,22 @@ namespace WhalePet
         private const string Bin = "E:\\deepseekharness\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js";
         private const string Harness = "E:\\deepseekharness";
 
-        private static readonly string[] PetArt = { "maid-right.png", "maid-left.png", "maid-extra-trim.png" };
+        private static readonly string[] PetArt = { "maid-right.png", "maid-left.png", "maid-extra-trim.png", "maid-whale-girl-extra.png" };
         private static readonly string[] PoseLines =
         {
             "怎么样主人~这个姿势的鲸鱼娘也很可爱吧?",
             "诶嘿,换个角度看你家小女仆~",
             "哦!主人想看这个姿势呀~鲸鱼娘转身给你看!",
+            "唔…这个珍藏姿势,鲸鱼娘只给主人看哦~(〃∀〃)",
         };
 
-        private enum PetAction { None, Stretch, Spin, Sleep, Hop, Look, Bubbles, Dance, Sneeze }
+        private enum PetAction { None, Stretch, Spin, Sleep, Hop, Look, Bubbles, Dance, Sneeze, Wave, Tilt, Wag, Shy }
 
         private readonly Random _rnd = new();
         private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(150) };
         private readonly DispatcherTimer _anim = new() { Interval = TimeSpan.FromMilliseconds(33) };
         private readonly DispatcherTimer _chatTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+        private Process _serverProc;
 
         private double _t;
         private int _poseIndex = 0;
@@ -57,6 +59,9 @@ namespace WhalePet
 
         // 小鱼干
         private DateTime _fishUntil = DateTime.MinValue;
+
+        // 心情表情
+        private DateTime _emojiUntil = DateTime.MinValue;
 
         // 定时问候(每天一次)
         private readonly DispatcherTimer _greetTimer = new() { Interval = TimeSpan.FromSeconds(45) };
@@ -161,6 +166,7 @@ namespace WhalePet
         {
             InitializeComponent();
             _nextActionAt = DateTime.Now.AddSeconds(_rnd.Next(18, 40));
+            TryAdoptServer(); // 认领之前鲸鱼娘拉起的服务(退出时才能关掉它)
             _clickTimer.Tick += (s, a) => { _clickTimer.Stop(); PetHead(); };
             _holdTimer.Tick += (s, a) =>
             {
@@ -215,6 +221,57 @@ namespace WhalePet
         {
             try { _chatTimer.Stop(); _http.Dispose(); } catch { }
             try { _chatWindow?.Close(); } catch { }
+            // 退出时关闭本桌宠拉起的 DSH 服务(不留孤儿进程)
+            try
+            {
+                if (_serverProc != null && !_serverProc.HasExited)
+                {
+                    _serverProc.Kill();
+                    _serverProc = null;
+                }
+            }
+            catch { }
+            // 兜底:若服务由启动器/handoff 等其它方式拉起,按 3080 端口匹配查杀
+            StopDshServer();
+        }
+
+        /// <summary>终结 3080 端口上的 DSH Web 服务(仅匹配 bin.js web,避免误杀其它进程)。</summary>
+        private void StopDshServer()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("powershell")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                psi.ArgumentList.Add("-NoProfile");
+                psi.ArgumentList.Add("-NonInteractive");
+                psi.ArgumentList.Add("-Command");
+                psi.ArgumentList.Add(
+                    "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | " +
+                    "Where-Object { $_.CommandLine -match 'bin\\.js.*web' } | " +
+                    "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }");
+                Process.Start(psi);
+            }
+            catch { }
+        }
+
+        private string ServerPidFile => Path.Combine(AppContext.BaseDirectory, "whale-server.pid");
+
+        /// <summary>启动时认领之前由鲸鱼娘拉起的服务(跨桌宠重启也能在退出时关掉它)。</summary>
+        private void TryAdoptServer()
+        {
+            try
+            {
+                if (!File.Exists(ServerPidFile)) return;
+                if (int.TryParse(File.ReadAllText(ServerPidFile).Trim(), out var pid))
+                {
+                    var p = Process.GetProcessById(pid);
+                    if (p != null && !p.HasExited) _serverProc = p;
+                }
+            }
+            catch { }
         }
 
         // ── 布局 ──
@@ -252,10 +309,10 @@ namespace WhalePet
             }
         }
 
-        private void SetPetTop(double y)
+        private void SetPetTop(double y, double scale = 1.0)
         {
             PetImg.SetValue(Canvas.TopProperty, y);
-            Shadow.SetValue(Canvas.TopProperty, y + 488);
+            Shadow.SetValue(Canvas.TopProperty, y + PetImg.Height * scale - 10);
         }
 
         // ── 动画引擎 ──
@@ -275,6 +332,34 @@ namespace WhalePet
             Glow.Opacity = 0.36 + 0.06 * Math.Sin(_t * 0.4);
 
             if (_hidden) return;
+
+            // 深海泡泡缓缓上浮
+            for (int bi = 0; bi < 3; bi++)
+            {
+                var el = bi == 0 ? BubbleEl1 : (bi == 1 ? BubbleEl2 : BubbleEl3);
+                double phase = bi * 2.1;
+                double cycle = (_t * 0.32 + phase) % 7.0;
+                double yy = 555 - cycle / 7.0 * 470;
+                double xx = 36 + bi * 96 + Math.Sin(_t * 0.8 + bi) * 14;
+                el.SetValue(Canvas.LeftProperty, xx);
+                el.SetValue(Canvas.TopProperty, yy);
+                el.Opacity = 0.42 * (1.0 - cycle / 7.0);
+            }
+
+            // 心情表情上浮
+            if (EmojiEl.Visibility == Visibility.Visible)
+            {
+                if (DateTime.Now > _emojiUntil)
+                {
+                    EmojiEl.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    double remain = (_emojiUntil - DateTime.Now).TotalSeconds;
+                    EmojiEl.SetValue(Canvas.TopProperty, 66 - (1.6 - remain) * 34);
+                    EmojiEl.Opacity = Math.Min(1.0, remain / 0.5);
+                }
+            }
 
             // 小鱼干漂浮 + 超时消失
             if (FishEl.Visibility == Visibility.Visible)
@@ -369,6 +454,16 @@ namespace WhalePet
                             rot = (el < 0.3 || (el > 0.7 && el < 1.05)) ? 13 : -9;
                             scaleY = 1 + Math.Abs(Math.Sin(el * 22)) * 0.07;
                             break;
+                        case PetAction.Tilt:
+                            rot = 13 * Math.Sin(el / dur * Math.PI);
+                            break;
+                        case PetAction.Wag:
+                            rot = Math.Sin(el * 16) * 6;
+                            break;
+                        case PetAction.Shy:
+                            scaleY = 0.94;
+                            rot = 6 * Math.Sin(el * 3);
+                            break;
                     }
                 }
             }
@@ -407,14 +502,19 @@ namespace WhalePet
             Shadow.Height = 26 * Math.Max(sh, 0.6);
             Shadow.Opacity = 0.55 - (floatY - jump + extraY + blush) / 220;
 
-            // 气泡显示时:鲸鱼娘后退一步缩小,气泡在头顶,不挡小脸
+            // 气泡显示时:立绘紧贴气泡下方(随气泡高度联动),不挡小脸
             bool bubbleShowing = Bubble.Visibility == Visibility.Visible && DateTime.Now < _bubbleUntil;
             if (bubbleShowing)
             {
-                SetPetTop(118);
-                PetScale.ScaleX = breathe * 0.85 * (1 + blush / 30);
-                PetScale.ScaleY = scaleY * breathe * 0.85 * (1 + blush / 30);
-                Shadow.Width = 140 * Math.Max(sh, 0.55);
+                double bh = Bubble.ActualHeight;
+                if (bh <= 0) bh = 48;
+                if (bh > 200) bh = 200;
+                double petTop2 = 2 + bh + 8; // 立绘头顶 = 气泡底部 + 8px
+                if (petTop2 < 60) petTop2 = 60;
+                SetPetTop(petTop2, 0.7);
+                PetScale.ScaleX = breathe * 0.7 * (1 + blush / 30);
+                PetScale.ScaleY = scaleY * breathe * 0.7 * (1 + blush / 30);
+                Shadow.Width = 120 * Math.Max(sh, 0.55);
             }
             else if (_bubblePulse > 0)
             {
@@ -479,6 +579,10 @@ namespace WhalePet
             PetAction.Bubbles => 2.8,
             PetAction.Dance => 3.2,
             PetAction.Sneeze => 1.5,
+            PetAction.Wave => 2.2,
+            PetAction.Tilt => 2.6,
+            PetAction.Wag => 2.0,
+            PetAction.Shy => 2.4,
             _ => 0,
         };
 
@@ -492,12 +596,16 @@ namespace WhalePet
             {
                 case PetAction.Stretch: Say("呼啊——伸个懒腰~"); break;
                 case PetAction.Spin: Say("咕噜咕噜转圈圈~"); break;
-                case PetAction.Sleep: Say("哈啊…有点困了…zzz"); break;
+                case PetAction.Sleep: Say("哈啊…有点困了…zzz"); ShowEmoji("💤"); break;
                 case PetAction.Hop: Say("嘿咻!蹦蹦跳~"); break;
                 case PetAction.Look: Say("嗯?那边好像有动静…"); break;
                 case PetAction.Bubbles: Say("咕噜…泡泡…咕噜…"); break;
                 case PetAction.Dance: Say("♪ 深海的旋律响起~跟着鲸鱼娘一起跳舞吧 ♪"); break;
                 case PetAction.Sneeze: Say("阿嚏!…深海水有点凉," + _petName + "记得添衣服…"); break;
+                case PetAction.Wave: Say("嗨~" + _petName + "!鲸鱼娘在这儿呢~"); break;
+                case PetAction.Tilt: Say("歪头杀~" + _petName + "喜欢这个角度吗?"); ShowEmoji("💙"); break;
+                case PetAction.Wag: Say("尾巴…尾巴停不下来…好开心!"); ShowEmoji("✨"); break;
+                case PetAction.Shy: Say("(⁄ ⁄•⁄ω⁄•⁄ ⁄) 被" + _petName + "看着…有点不好意思…"); ShowEmoji("💗"); break;
             }
         }
 
@@ -526,7 +634,8 @@ namespace WhalePet
             text = text.Replace("主人", _petName);
             BubbleText.Text = text;
             Bubble.Visibility = Visibility.Visible;
-            _bubbleUntil = DateTime.Now.AddSeconds(6);
+            // 长文本延长展示时间:基础 6 秒,每 25 字 +1 秒,最长 22 秒
+            _bubbleUntil = DateTime.Now.AddSeconds(Math.Min(6 + text.Length / 25.0, 22));
             _bubblePulse = 1;
         }
 
@@ -622,17 +731,20 @@ namespace WhalePet
             {
                 Say("今天摸了鲸鱼娘 " + _petCount + " 次头…幸福得冒泡泡了!咕噜咕噜~💙");
                 _jumpUntil = DateTime.Now.AddMilliseconds(650);
+                ShowEmoji("✨");
                 return;
             }
             switch (_rnd.Next(6))
             {
                 case 0:
                     _jumpUntil = DateTime.Now.AddMilliseconds(650);
-                    Say("嘿嘿,主人的手好暖~鲸鱼娘最喜欢被摸头了!");
+                    Say("嘿嘿," + _petName + "的手好暖~鲸鱼娘最喜欢被摸头了!");
+                    ShowEmoji("♪");
                     break;
                 case 1:
                     _blushUntil = DateTime.Now.AddMilliseconds(900);
-                    Say("呜…被主人摸头了…(〃////〃) 再、再摸一下也不是不行…");
+                    Say("呜…被" + _petName + "摸头了…(〃////〃) 再、再摸一下也不是不行…");
+                    ShowEmoji("💗");
                     break;
                 case 2:
                     _leanUntil = DateTime.Now.AddMilliseconds(1700);
@@ -640,8 +752,9 @@ namespace WhalePet
                     break;
                 case 3:
                     Say(_petCount > 3
-                        ? "哼~主人现在才想起摸鲸鱼娘的头,刚才都在忙别的…(但还是很开心)"
-                        : "哼!主人摸头之前要打招呼的!…好吧,原谅你了~");
+                        ? "哼~" + _petName + "现在才想起摸鲸鱼娘的头,刚才都在忙别的…(但还是很开心)"
+                        : "哼!" + _petName + "摸头之前要打招呼的!…好吧,原谅你了~");
+                    ShowEmoji("💢");
                     _leanUntil = DateTime.Now.AddMilliseconds(1100);
                     break;
                 case 4:
@@ -653,6 +766,15 @@ namespace WhalePet
                     Say("诶嘿~摸头加满好感度!鲸鱼娘电量 100%!");
                     break;
             }
+        }
+
+        // ── 心情表情 ──
+        private void ShowEmoji(string emoji)
+        {
+            EmojiEl.Text = emoji;
+            EmojiEl.Visibility = Visibility.Visible;
+            EmojiEl.Opacity = 1;
+            _emojiUntil = DateTime.Now.AddSeconds(1.6);
         }
 
         // ── 小鱼干 ──
@@ -675,6 +797,7 @@ namespace WhalePet
             _fishUntil = DateTime.MinValue;
             _jumpUntil = DateTime.Now.AddMilliseconds(700);
             _blushUntil = DateTime.Now.AddMilliseconds(800);
+            ShowEmoji("✨");
             Say("呜哇!!小鱼干!!谢谢" + _petName + "~鲸鱼娘超开心,尾巴都要打卷啦!(咕噜咕噜~)💙");
         }
 
@@ -684,6 +807,7 @@ namespace WhalePet
             _blushUntil = DateTime.Now.AddMilliseconds(1300);
             _jumpUntil = DateTime.Now.AddMilliseconds(500);
             _lastPetAt = DateTime.Now;
+            ShowEmoji("💗");
             Say(Pick(KissLines));
         }
 
@@ -998,8 +1122,16 @@ namespace WhalePet
                             var t = tp.GetString();
                             if (!string.IsNullOrEmpty(t))
                             {
-                                Say(t);
-                                if (_chatWindow != null && _chatWindow.IsVisible) _chatWindow.AppendPet(t);
+                                if (t.StartsWith("🛠️"))
+                                {
+                                    // 干活进度:只进聊天室,不弹气泡打扰
+                                    if (_chatWindow != null && _chatWindow.IsVisible) _chatWindow.AppendPet(t);
+                                }
+                                else
+                                {
+                                    Say(t);
+                                    if (_chatWindow != null && _chatWindow.IsVisible) _chatWindow.AppendPet(t);
+                                }
                             }
                         }
                     }
@@ -1023,7 +1155,8 @@ namespace WhalePet
                 };
                 psi.ArgumentList.Add(Bin);
                 psi.ArgumentList.Add("web");
-                Process.Start(psi);
+                _serverProc = Process.Start(psi);
+                try { File.WriteAllText(ServerPidFile, _serverProc.Id.ToString()); } catch { }
                 for (int i = 0; i < 90; i++)
                 {
                     await Task.Delay(1000);
