@@ -63,6 +63,11 @@ namespace WhalePet
         // 心情表情
         private DateTime _emojiUntil = DateTime.MinValue;
 
+        // 大肥鱼模式(assets/dafeiyu 三视图行走立绘)
+        private bool _bigFishMode;
+        private string _bfView = "side";
+        private BitmapImage _bfFront, _bfSide, _bfBack;
+
         // 定时问候(每天一次)
         private readonly DispatcherTimer _greetTimer = new() { Interval = TimeSpan.FromSeconds(45) };
         private DateTime _greetDay = DateTime.MinValue;
@@ -284,6 +289,7 @@ namespace WhalePet
 
         private void LoadPet(int index)
         {
+            if (_bigFishMode) return; // 大肥鱼模式下保持三视图立绘
             _poseIndex = index % PetArt.Length;
             var path = Path.Combine(AppContext.BaseDirectory, "assets", PetArt[_poseIndex]);
             try
@@ -315,6 +321,84 @@ namespace WhalePet
             Shadow.SetValue(Canvas.TopProperty, y + PetImg.Height * scale - 10);
         }
 
+        // ── 大肥鱼模式(assets/dafeiyu 三视图行走立绘:左右走侧面、向上走背面、向下走正面)──
+        private void LoadBigFish()
+        {
+            try
+            {
+                var dir = Path.Combine(AppContext.BaseDirectory, "assets", "dafeiyu");
+                _bfFront = LoadBmp(Path.Combine(dir, "front.png"));
+                _bfSide = LoadBmp(Path.Combine(dir, "side.png"));
+                _bfBack = LoadBmp(Path.Combine(dir, "back.png"));
+                _bigFishMode = true;
+                _bfView = "side";
+                ApplyBigFishView();
+                Say("扑通!鲸鱼娘变成蓝色大肥鱼啦~三视图行走,想去哪就去哪!(🐋)");
+            }
+            catch
+            {
+                Say("呜…大肥鱼素材加载失败,主人检查一下 assets/dafeiyu?");
+            }
+        }
+
+        private void ExitBigFish()
+        {
+            _bigFishMode = false;
+            LoadPet(_poseIndex);
+        }
+
+        private BitmapImage LoadBmp(string path)
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(path);
+            bmp.EndInit();
+            return bmp;
+        }
+
+        /// <summary>按漫游方向切换三视图:横向走侧面、向上走背面、向下走正面。</summary>
+        private void UpdateBigFishView()
+        {
+            if (!_bigFishMode) return;
+            string view = _bfView;
+            if (_wandering)
+            {
+                double dx = _wanderTarget.X - Left;
+                double dy = _wanderTarget.Y - Top;
+                if (Math.Abs(dx) > Math.Abs(dy) * 1.2) view = "side";
+                else if (dy < 0) view = "back";
+                else view = "front";
+            }
+            if (view != _bfView)
+            {
+                _bfView = view;
+                ApplyBigFishView();
+            }
+        }
+
+        private void ApplyBigFishView()
+        {
+            BitmapImage bmp = _bfView switch
+            {
+                "front" => _bfFront,
+                "back" => _bfBack,
+                _ => _bfSide,
+            };
+            if (bmp == null) return;
+            PetImg.Source = bmp;
+            // 统一显示高度 420,宽度按各自比例(窗口宽 320)
+            double h = 420;
+            double w = Math.Round(h * bmp.PixelWidth / bmp.PixelHeight);
+            PetImg.Width = w;
+            PetImg.Height = h;
+            PetImg.SetValue(Canvas.LeftProperty, (Width - PetImg.Width) / 2);
+            _petTopNormal = 52;
+            SetPetTop(_petTopNormal);
+            Shadow.Width = 150;
+            Shadow.Height = 18;
+        }
+
         // ── 动画引擎 ──
         private void AnimTick(object sender, EventArgs e)
         {
@@ -330,6 +414,9 @@ namespace WhalePet
             Light4.SetValue(Canvas.LeftProperty, 246 + Math.Sin(_t * 0.6 + 0.9) * 12);
             Light4.SetValue(Canvas.TopProperty, 414 + Math.Sin(_t * 0.44 + 2.6) * 16);
             Glow.Opacity = 0.36 + 0.06 * Math.Sin(_t * 0.4);
+
+            // 大肥鱼模式:按漫游方向切换三视图
+            UpdateBigFishView();
 
             if (_hidden) return;
 
@@ -935,6 +1022,12 @@ namespace WhalePet
         private void BuildMenu()
         {
             AddMenuItem("🔄 换个姿势", () => { LoadPet(_poseIndex + 1); Say(Pick(PoseLines)); });
+            AddMenuItem(_bigFishMode ? "🐋 退出大肥鱼模式" : "🐋 大肥鱼模式", () =>
+            {
+                HideMenu();
+                if (_bigFishMode) { ExitBigFish(); Say("鲸鱼娘变回来啦~还是优雅的女仆好看吧?"); }
+                else LoadBigFish();
+            });
             AddMenuItem("💙 抱抱我", () => Say(Pick(HugLines)));
             AddMenuItem("🌙 说晚安", () => Say(Pick(NightLines)));
             AddMenuItem("💬 打开聊天室", OpenChatWindow);
