@@ -18,6 +18,84 @@ let agent = null;
 let lastChatAt = 0;
 let busy = false;
 const proactiveQueue = [];
+const pendingApprovals = new Map(); // callId -> { timer, resolve }
+
+/** 用户聊天回复「同意/拒绝」→ 批准/拒绝挂起的审批。返回 null 表示不是审批回复。 */
+function tryResolveApproval(text) {
+  const t = String(text || '').trim().toLowerCase();
+  const approve = /^(同意|批准|允许|可以|好的?|好|ok|yes|approve|允许执行|没问题)\s*[!！。.]*\s*$/.test(t);
+  const reject = /^(拒绝|不同意|取消|不?行|不许|no|reject)\s*[!！。.]*\s*$/.test(t);
+  if (!approve && !reject) return null;
+  const keys = [...pendingApprovals.keys()];
+  if (keys.length === 0) return null;
+  const id = keys[keys.length - 1];
+  const p = pendingApprovals.get(id);
+  pendingApprovals.delete(id);
+  clearTimeout(p.timer);
+  p.resolve(approve ? 'allowed-once' : 'rejected');
+  return {
+    ok: true,
+    reply: approve
+      ? '收到!鲸鱼娘已获得授权,继续干活~ 💙'
+      : '好~鲸鱼娘取消了这次操作,等你重新吩咐!',
+  };
+}
+
+/** 监听 whale-pet 的审批请求:推送到聊天室,等待用户回复「同意/拒绝」。 */
+function registerApprovalBridge(ctx) {
+  ctx.on('approval/request', (req, next) => {
+    if (!req || !req.agent || req.agent.id !== PET_ID) return next();
+    const id = req.callId || ('appr-' + Date.now());
+    const reason = (req.reason || '').trim();
+    proactiveQueue.push({
+      text: '🔐 鲸鱼娘需要授权:执行 [' + req.toolName + ']' + (reason ? '\n' + reason.slice(0, 150) : '') + '\n💬 在聊天室回复「同意」继续,「拒绝」取消',
+      at: Date.now(),
+    });
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pendingApprovals.delete(id);
+        resolve('unavailable');
+      }, 150000);
+      pendingApprovals.set(id, { timer, resolve });
+      if (req.signal) {
+        req.signal.addEventListener('abort', () => {
+          if (pendingApprovals.has(id)) {
+            pendingApprovals.delete(id);
+            clearTimeout(timer);
+            resolve('cancelled');
+          }
+        }, { once: true });
+      }
+    });
+  }, true);
+}
+
+/** 本轮任务的工作简报:最近 turn 用到的工具列表。 */
+async function buildReport(ctx) {
+  try {
+    const q = ctx.get('sessionQuery');
+    if (!q) return '';
+    const snap = await q.readSession(PET_ID);
+    const events = snap && Array.isArray(snap.events) ? snap.events : [];
+    const tools = [];
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      if (ev.type === 'turn/end') break;
+      const data = ev.data || ev.payload || {};
+      const msg = data.message || data;
+      const blocks = msg && Array.isArray(msg.content) ? msg.content : [];
+      for (const b of blocks) {
+        if (b && b.type === 'tool-call' && b.name && !tools.includes(b.name)) tools.push(b.name);
+      }
+    }
+    if (tools.length > 0) {
+      return '📋 工作简报:鲸鱼娘调用了 ' + tools.join('、') + ' 完成了这项任务,细节可以看工作台~';
+    }
+    return '';
+  } catch (e) {
+    return '';
+  }
+}
 
 async function mountPreset(agentCtx) {
   try {
@@ -122,23 +200,94 @@ async function lastAssistantText(ctx) {
   }
 }
 
+/** 带超时的等待:超时后 resolve(false),并尝试取消代理当前活动。 */
+async function waitIdle(ag, ms) {
+  let done = false;
+  const timer = setTimeout(() => {
+    if (!done) {
+      try { ag.cancel('timeout'); } catch (e) { /* agent gone */ }
+    }
+  }, ms);
+  try {
+    await ag.whenIdle();
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    done = true;
+    clearTimeout(timer);
+  }
+}
+
+/** 监视会话新事件中的工具调用,实时推送进度到聊天室。返回停止函数。 */
+function startProgressMonitor(ctx, getStartSeq) {
+  let seenSeq = getStartSeq();
+  const timer = setInterval(async () => {
+    try {
+      const q = ctx.get('sessionQuery');
+      if (!q) return;
+      const s = await q.readSession(PET_ID);
+      const evs = s && Array.isArray(s.events) ? s.events : [];
+      for (const ev of evs) {
+        if (typeof ev.seq !== 'number' || ev.seq <= seenSeq) continue;
+        const data = ev.data || ev.payload || {};
+        const msg = data.message || data;
+        const blocks = msg && Array.isArray(msg.content) ? msg.content : [];
+        for (const b of blocks) {
+          if (b && b.type === 'tool-call' && b.name) {
+            let arg = '';
+            try {
+              const a = JSON.parse(b.arguments || '{}');
+              arg = Object.keys(a).map((k) => k + '=' + String(a[k]).slice(0, 40)).join(', ').slice(0, 120);
+            } catch (err) { /* keep raw */ }
+            if (proactiveQueue.length < 12) {
+              proactiveQueue.push({ text: '🛠️ 鲸鱼娘正在:调用 [' + b.name + ']' + (arg ? ' — ' + arg : ''), at: Date.now() });
+            }
+          }
+        }
+      }
+      if (evs.length > 0) seenSeq = evs[evs.length - 1].seq;
+    } catch (err) { /* transient */ }
+  }, 2000);
+  return () => clearInterval(timer);
+}
+
 async function driveChat(ctx, text) {
+  // 审批回复优先处理(即使 busy 也放行)
+  const appr = tryResolveApproval(text);
+  if (appr) return appr;
   const h = await ensureAgent(ctx);
   if (!h) return { ok: false, error: '鲸鱼娘还在深海里,稍后再试~' };
   if (busy) return { ok: false, error: '鲸鱼娘正在忙别的事呢,稍等一下哦~' };
   busy = true;
+  let stopMonitor = null;
   try {
     const ag = h.agent;
-    await ag.whenIdle();
+    await waitIdle(ag, 15000);
+    let startSeq = 0;
+    try {
+      const q = ctx.get('sessionQuery');
+      if (q) {
+        const s = await q.readSession(PET_ID);
+        const evs = s && Array.isArray(s.events) ? s.events : [];
+        startSeq = evs.length > 0 ? evs[evs.length - 1].seq : 0;
+      }
+    } catch (err) { /* keep 0 */ }
     ag.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }));
-    await ag.whenIdle();
+    stopMonitor = startProgressMonitor(ctx, () => startSeq);
+    await waitIdle(ag, 150000);
     lastChatAt = Date.now();
     const reply = await lastAssistantText(ctx);
-    return reply ? { ok: true, reply } : { ok: false, error: '鲸鱼娘走神了,没说出话…再试一次?' };
+    if (!reply) return { ok: false, error: '鲸鱼娘走神了,没说出话…再试一次?' };
+    // 工作简报:本轮用到的工具
+    const report = await buildReport(ctx);
+    if (report) proactiveQueue.push({ text: report, at: Date.now() });
+    return { ok: true, reply };
   } catch (e) {
     console.error('[whale-bridge] chat failed:', e && e.message ? e.message : String(e));
     return { ok: false, error: '聊天出错啦:' + (e && e.message ? e.message : String(e)) };
   } finally {
+    if (stopMonitor) stopMonitor();
     busy = false;
   }
 }
@@ -151,9 +300,9 @@ async function driveProactive(ctx) {
     const h = await ensureAgent(ctx);
     if (!h) return;
     const ag = h.agent;
-    await ag.whenIdle();
+    await waitIdle(ag, 15000);
     ag.followup(createUserMessage({ content: [{ type: 'text', text: PROACTIVE_PROMPT }], source: { kind: 'user' } }));
-    await ag.whenIdle();
+    await waitIdle(ag, 150000);
     const reply = await lastAssistantText(ctx);
     if (reply && proactiveQueue.length < 5) {
       proactiveQueue.push({ text: reply, at: Date.now() });
@@ -198,6 +347,22 @@ function handle(req, res, ctx) {
         return;
       }
       sendJson(res, 400, { ok: false, error: 'unknown act' });
+    }).catch(() => sendJson(res, 400, { ok: false, error: 'bad request' }));
+    return;
+  }
+  if (req.method === 'POST' && url === '/api/whale/approve') {
+    readBody(req).then(async (body) => {
+      const allow = !!(body && body.allow);
+      const id = body && body.id;
+      const pick = id && pendingApprovals.has(id)
+        ? id
+        : [...pendingApprovals.keys()].pop();
+      if (!pick) return sendJson(res, 404, { ok: false, error: '没有待审批的请求' });
+      const p = pendingApprovals.get(pick);
+      pendingApprovals.delete(pick);
+      clearTimeout(p.timer);
+      p.resolve(allow ? 'allowed-once' : 'rejected');
+      sendJson(res, 200, { ok: true, allowed: allow });
     }).catch(() => sendJson(res, 400, { ok: false, error: 'bad request' }));
     return;
   }
@@ -267,6 +432,11 @@ export const inject = ['webServer'];
 
 export function apply(ctx) {
   const webServer = ctx.webServer;
+  try {
+    registerApprovalBridge(ctx);
+  } catch (e) {
+    console.error('[whale-bridge] approval bridge failed:', e && e.message ? e.message : String(e));
+  }
   try {
     ctx.effect(() => webServer.register({ kind: 'prefix', path: '/api/whale', handler: (req, res) => handle(req, res, ctx) }), 'whale-bridge: routes');
   } catch (e) {
