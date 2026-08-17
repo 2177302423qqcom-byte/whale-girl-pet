@@ -42,6 +42,15 @@
                 </Ellipse.Effect>
             </Ellipse>
 
+            <!-- 深海泡泡 -->
+            <TextBlock x:Name="BubbleEl1" Text="🫧" FontSize="16" Opacity="0.4" Canvas.Left="40" Canvas.Top="480" />
+            <TextBlock x:Name="BubbleEl2" Text="🫧" FontSize="12" Opacity="0.35" Canvas.Left="130" Canvas.Top="300" />
+            <TextBlock x:Name="BubbleEl3" Text="🫧" FontSize="20" Opacity="0.3" Canvas.Left="220" Canvas.Top="420" />
+
+            <!-- 心情表情(头顶浮动) -->
+            <TextBlock x:Name="EmojiEl" Text="" FontSize="36" Visibility="Collapsed"
+                       Canvas.Left="130" Canvas.Top="50" />
+
             <Ellipse x:Name="Shadow" Width="170" Height="26" Fill="#66000000"
                      Canvas.Left="75" Canvas.Top="512">
                 <Ellipse.Effect>
@@ -61,11 +70,15 @@
             </Image>
 
             <Border x:Name="Bubble" Background="#FFFFFF" CornerRadius="14,14,4,14"
-                    BorderBrush="#3A6EA5" BorderThickness="1" MaxWidth="280" MaxHeight="108"
-                    Padding="12,9" Visibility="Collapsed" Canvas.Left="8" Canvas.Top="4"
-                    Opacity="0.97" ClipToBounds="True">
-                <TextBlock x:Name="BubbleText" TextWrapping="Wrap" FontSize="13.5"
-                           Foreground="#1C2B45" LineHeight="21" MaxWidth="256" MaxHeight="86" />
+                    BorderBrush="#3A6EA5" BorderThickness="1" MaxWidth="280" MaxHeight="200"
+                    Visibility="Collapsed" Canvas.Left="20" Canvas.Top="4"
+                    Opacity="0.97">
+                <ScrollViewer MaxHeight="198" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <TextBlock x:Name="BubbleText" TextWrapping="Wrap" FontSize="13.5"
+                               Foreground="#1C2B45" LineHeight="21" MaxWidth="256"
+                               Margin="12,9" />
+                </ScrollViewer>
             </Border>
 
             <Border x:Name="Menu" Background="#132035" CornerRadius="12" Padding="5"
